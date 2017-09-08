@@ -1,0 +1,9 @@
+PORTS = \
+  --publish 8083:8083 \
+  --publish 8086:8086
+
+VOLUMES = \
+  --volume /var/log/docker:/var/log \
+  --volume /tmp/docker-data:/srv
+
+ENV =
