@@ -1,4 +1,5 @@
 PORTS = \
+  --publish 2003:2003 \
   --publish 8083:8083 \
   --publish 8086:8086
 

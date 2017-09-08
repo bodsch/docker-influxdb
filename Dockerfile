@@ -10,7 +10,7 @@ ENV \
   BUILD_DATE="2017-09-08" \
   INFLUXDB_VERSION="1.3.5"
 
-EXPOSE 8083 8086
+EXPOSE 2003 8083 8086
 
 LABEL \
   version="1709-36" \
@@ -26,6 +26,8 @@ LABEL \
   com.microscaling.license="GNU General Public License v3.0"
 
 # ---------------------------------------------------------------------------------------
+
+COPY rootfs/ /
 
 RUN \
   echo "http://${ALPINE_MIRROR}/alpine/${ALPINE_VERSION}/main"       > /etc/apk/repositories && \
@@ -44,20 +46,26 @@ RUN \
     gpg --keyserver pgp.mit.edu --recv-keys "$key" || \
     gpg --keyserver keyserver.pgp.com --recv-keys "$key" ; \
   done && \
+  #
   wget -q https://dl.influxdata.com/influxdb/releases/influxdb-${INFLUXDB_VERSION}-static_linux_amd64.tar.gz.asc && \
   wget -q https://dl.influxdata.com/influxdb/releases/influxdb-${INFLUXDB_VERSION}-static_linux_amd64.tar.gz && \
+  #
   gpg --batch --verify influxdb-${INFLUXDB_VERSION}-static_linux_amd64.tar.gz.asc influxdb-${INFLUXDB_VERSION}-static_linux_amd64.tar.gz && \
+  #
   mkdir -p /usr/src && \
   tar -C /usr/src -xzf influxdb-${INFLUXDB_VERSION}-static_linux_amd64.tar.gz && \
-  rm -f /usr/src/influxdb-*/influxdb.conf && \
-  chmod +x /usr/src/influxdb-*/* && \
-  cp -a /usr/src/influxdb-*/* /usr/bin/ && \
-  rm -rf *.tar.gz* /usr/src /root/.gnupg && \
-  apk del .build-deps
+  mv -v /usr/src/influxdb-*/influxdb.conf /etc/influxdb/influxdb.conf-DIST  && \
+  chmod -v +x /usr/src/influxdb-*/influx* && \
+  cp -av /usr/src/influxdb-*/influx* /usr/bin/ && \
+  #
+  apk del .build-deps && \
+  rm -rf \
+    /tmp/* \
+    /usr/src \
+    /root/.gnupg \
+    /var/cache/apk/*
 
-COPY rootfs/ /
-
-VOLUME [ "/var/lib/influxdb" ]
+VOLUME [ "/var/lib/influxdb", "/srv" ]
 
 ENTRYPOINT ["/init/run.sh"]
 
