@@ -35,6 +35,7 @@ shell:
 		--name $(NAME)-$(INSTANCE) \
 		--interactive \
 		--tty \
+		--entrypoint '' \
 		$(PORTS) \
 		$(VOLUMES) \
 		$(ENV) \
