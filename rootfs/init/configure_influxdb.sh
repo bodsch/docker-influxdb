@@ -76,7 +76,6 @@ create_user() {
 
 init() {
 
-
   for i in {30..0}
   do
     if ${INFLUX_CMD} "SHOW DATABASES" &> /dev/null
