@@ -23,16 +23,15 @@ INIT_USERS=$([ ! -z "${AUTH_ENABLED}" ] && [ ! -z "${INFLUXDB_ADMIN_USER}" ] && 
 
 start_influx() {
 
-  INFLUXDB_HTTP_BIND_ADDRESS=127.0.0.1:${INFLUXDB_INIT_PORT} influxd "$@" &
+  INFLUXDB_HTTP_BIND_ADDRESS=127.0.0.1:${INFLUXDB_INIT_PORT} influxd 2> /dev/null "$@" &
   PID="$!"
-
 }
 
 stop_influx() {
 
   if ! kill -s TERM "${PID}" || ! wait "${PID}"
   then
-    echo >&2 'influxdb init process failed. (Could not stop influxdb)'
+    echo >&2 ' [E] influxdb init process failed. (Could not stop influxdb)'
     exit 1
   fi
 }
@@ -41,10 +40,17 @@ stop_influx() {
 create_database() {
 
   local database=${1}
+  local retention_policy=${2}
 
-  local create_db_query="CREATE DATABASE ${database}"
+  local query="CREATE DATABASE ${database}"
 
-  ${INFLUX_CMD} "${create_db_query}"
+  if [ ! -z ${retention_policy} ]
+  then
+    query="${query} WITH DURATION ${retention_policy}"
+  fi
+
+  ${INFLUX_CMD} "${query}"
+  # ${INFLUX_CMD} "SHOW RETENTION POLICIES ON ${database}"
 }
 
 create_user() {
@@ -56,8 +62,9 @@ create_user() {
 
   query="SHOW USERS"
 
-  if [ $(${INFLUX_CMD} "${query}" 2> /dev/null | grep -c ${user}) -eq 0 ]
+  if [ $(${INFLUX_CMD} "${query}" 2> /dev/null | grep -c "^${user}") -eq 0 ]
   then
+    echo "     - ${user}"
 
     local influx_cmd="influx -host 127.0.0.1 -port ${INFLUXDB_INIT_PORT} -username ${INFLUXDB_ADMIN_USER} -password ${INFLUXDB_ADMIN_PASSWORD} -execute "
 
@@ -82,13 +89,13 @@ init() {
     then
       break
     fi
-    echo 'influxdb init process in progress...'
+    echo ' [i] influxdb init process in progress...'
     sleep 1
   done
 
   if [ "$i" = 0 ]
   then
-    echo >&2 'influxdb init process failed.'
+    echo >&2 ' [E] influxdb init process failed.'
     exit 1
   fi
 
@@ -100,7 +107,12 @@ init() {
 
     echo "${databases}" | jq --compact-output --raw-output '.[]' | while IFS='' read u
     do
-      create_database "${u}"
+      name=$(echo "${u}" | jq --raw-output .name)
+      retention_policy=$(echo "${u}" | jq --raw-output .retention_policy)
+
+      [ ${retention_policy} == null ] && retention_policy=
+
+      create_database "${name}" "${retention_policy}"
     done
   fi
 
@@ -118,7 +130,7 @@ init() {
       if [ -z "${INFLUXDB_ADMIN_PASSWORD}" ]
       then
         INFLUXDB_ADMIN_PASSWORD="$(< /dev/urandom tr -dc _A-Z-a-z-0-9 | head -c32;echo;)"
-        echo "INFLUXDB_ADMIN_PASSWORD:${INFLUXDB_ADMIN_PASSWORD}"
+        echo " [i] INFLUXDB_ADMIN_PASSWORD: ${INFLUXDB_ADMIN_PASSWORD}"
       fi
 
       query="CREATE USER ${INFLUXDB_ADMIN_USER} WITH PASSWORD '${INFLUXDB_ADMIN_PASSWORD}' WITH ALL PRIVILEGES"
@@ -162,141 +174,7 @@ custom_config() {
 }
 
 
-
-init_old() {
-
-if ( [ ! -z "${INIT_USERS}" ] || [ ! -z "${INFLUXDB_DB}" ] || [ "$(ls -A /init/initdb.d 2> /dev/null)" ] ) && [ ! "$(ls -A /var/lib/influxdb)" ]
-then
-
-  INIT_QUERY=""
-  CREATE_DB_QUERY="CREATE DATABASE ${INFLUXDB_DB}"
-
-  if [ ! -z "${INIT_USERS}" ]
-  then
-
-    if [ -z "${INFLUXDB_ADMIN_PASSWORD}" ]
-    then
-      INFLUXDB_ADMIN_PASSWORD="$(< /dev/urandom tr -dc _A-Z-a-z-0-9 | head -c32;echo;)"
-      echo "INFLUXDB_ADMIN_PASSWORD:${INFLUXDB_ADMIN_PASSWORD}"
-    fi
-
-    INIT_QUERY="CREATE USER ${INFLUXDB_ADMIN_USER} WITH PASSWORD '${INFLUXDB_ADMIN_PASSWORD}' WITH ALL PRIVILEGES"
-  elif [ ! -z "${INFLUXDB_DB}" ]
-  then
-    INIT_QUERY="${CREATE_DB_QUERY}"
-  else
-    INIT_QUERY="SHOW DATABASES"
-  fi
-
-  INFLUXDB_INIT_PORT="8086"
-
-  INFLUXDB_HTTP_BIND_ADDRESS=127.0.0.1:${INFLUXDB_INIT_PORT} influxd "$@" &
-  pid="$!"
-
-  INFLUX_CMD="influx -host 127.0.0.1 -port ${INFLUXDB_INIT_PORT} -execute "
-
-  for i in {30..0}
-  do
-    if ${INFLUX_CMD} "${INIT_QUERY}" &> /dev/null
-    then
-      break
-    fi
-    echo 'influxdb init process in progress...'
-    sleep 1
-  done
-
-  if [ "$i" = 0 ]
-  then
-    echo >&2 'influxdb init process failed.'
-    exit 1
-  fi
-
-  if [ ! -z "${INIT_USERS}" ]
-  then
-
-    INFLUX_CMD="influx -host 127.0.0.1 -port ${INFLUXDB_INIT_PORT} -username ${INFLUXDB_ADMIN_USER} -password ${INFLUXDB_ADMIN_PASSWORD} -execute "
-
-    if [ ! -z "${INFLUXDB_DB}" ]
-    then
-      ${INFLUX_CMD} "${CREATE_DB_QUERY}"
-    fi
-
-    if [ ! -z "${INFLUXDB_USER}" ] && [ -z "${INFLUXDB_USER}_PASSWORD" ]
-    then
-      INFLUXDB_USER_PASSWORD="$(< /dev/urandom tr -dc _A-Z-a-z-0-9 | head -c32;echo;)"
-      echo "INFLUXDB_USER_PASSWORD:${INFLUXDB_USER}_PASSWORD"
-    fi
-
-    if [ ! -z "${INFLUXDB_USER}" ]
-    then
-      ${INFLUX_CMD} "CREATE USER ${INFLUXDB_USER} WITH PASSWORD '${INFLUXDB_USER}_PASSWORD'"
-
-      ${INFLUX_CMD} "REVOKE ALL PRIVILEGES FROM ""${INFLUXDB_USER}"""
-
-      if [ ! -z "${INFLUXDB_DB}" ]
-      then
-        ${INFLUX_CMD} "GRANT ALL ON ""${INFLUXDB_DB}"" TO ""${INFLUXDB_USER}"""
-      fi
-    fi
-
-    if [ ! -z "${INFLUXDB_WRITE_USER}" ] && [ -z "${INFLUXDB_WRITE_USER}_PASSWORD" ]
-    then
-      INFLUXDB_WRITE_USER_PASSWORD="$(< /dev/urandom tr -dc _A-Z-a-z-0-9 | head -c32;echo;)"
-      echo "INFLUXDB_WRITE_USER_PASSWORD:${INFLUXDB_WRITE_USER}_PASSWORD"
-    fi
-
-    if [ ! -z "${INFLUXDB_WRITE_USER}" ]
-    then
-      ${INFLUX_CMD} "CREATE USER ${INFLUXDB_WRITE_USER} WITH PASSWORD '${INFLUXDB_WRITE_USER}_PASSWORD'"
-      ${INFLUX_CMD} "REVOKE ALL PRIVILEGES FROM ""${INFLUXDB_WRITE_USER}"""
-
-      if [ ! -z "${INFLUXDB_DB}" ]
-      then
-        ${INFLUX_CMD} "GRANT WRITE ON ""${INFLUXDB_DB}"" TO ""${INFLUXDB_WRITE_USER}"""
-      fi
-    fi
-
-    if [ ! -z "${INFLUXDB_READ_USER}" ] && [ -z "${INFLUXDB_READ_USER_PASSWORD}" ]
-    then
-      INFLUXDB_READ_USER_PASSWORD="$(< /dev/urandom tr -dc _A-Z-a-z-0-9 | head -c32;echo;)"
-      echo "INFLUXDB_READ_USER_PASSWORD:${INFLUXDB_READ_USER_PASSWORD}"
-    fi
-
-    if [ ! -z "${INFLUXDB_READ_USER}" ]
-    then
-      ${INFLUX_CMD} "CREATE USER ${INFLUXDB_READ_USER} WITH PASSWORD '${INFLUXDB_READ_USER_PASSWORD}'"
-      ${INFLUX_CMD} "REVOKE ALL PRIVILEGES FROM ""${INFLUXDB_READ_USER}"""
-
-      if [ ! -z "${INFLUXDB_DB}" ]
-      then
-        ${INFLUX_CMD} "GRANT READ ON ""${INFLUXDB_DB}"" TO ""${INFLUXDB_READ_USER}"""
-      fi
-    fi
-
-  fi
-
-  for f in /init/initdb.d/*
-  do
-    case "$f" in
-      *.sh)     echo "$0: running $f"; . "$f" ;;
-      *.iql)    echo "$0: running $f"; ${INFLUX_CMD} "$(cat ""$f"")"; echo ;;
-      *)        echo "$0: ignoring $f" ;;
-    esac
-    echo
-  done
-
-  if ! kill -s TERM "$pid" || ! wait "$pid"
-  then
-    echo >&2 'influxdb init process failed. (Could not stop influxdb)'
-    exit 1
-  fi
-
-fi
-
-}
-
 # ---------------------------------
-
 
 start_influx
 
@@ -305,4 +183,3 @@ init
 custom_config
 
 stop_influx
-

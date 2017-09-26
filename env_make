@@ -8,5 +8,5 @@ VOLUMES = \
   --volume /tmp/docker-data:/srv
 
 ENV = \
-  --env DATABASES='["telegraf","influxdb"]' \
+  --env DATABASES='[{"name":"telegraf"},{"name":"influxdb","retention_policy":"10d"}]' \
   --env USERS='[{"user":"foo","password":"bar","rights":["read","write"]},{"user":"bar","password":"barbar","rights":["read"]}]'
