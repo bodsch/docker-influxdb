@@ -1,0 +1,12 @@
+sudo: required
+
+services:
+  - docker
+
+install:
+  - docker build --tag bodsch/docker-influxdb .
+  - docker run --detach --name influxdb bodsch/docker-influxdb
+
+script:
+  - docker ps | grep -q influxdb
+

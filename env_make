@@ -7,4 +7,6 @@ VOLUMES = \
   --volume /var/log/docker:/var/log \
   --volume /tmp/docker-data:/srv
 
-ENV =
+ENV = \
+  --env DATABASES='["telegraf","influxdb"]' \
+  --env USERS='[{"user":"foo","password":"bar","rights":["read","write"]},{"user":"bar","password":"barbar","rights":["read"]}]'

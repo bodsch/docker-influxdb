@@ -1,7 +1,7 @@
 #!/bin/sh
 
 set -e
-set +x
+# set -x
 
 if [ "${1:0:1}" = '-' ]
 then
