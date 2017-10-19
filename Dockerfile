@@ -7,13 +7,13 @@ ENV \
   ALPINE_MIRROR="mirror1.hs-esslingen.de/pub/Mirrors" \
   ALPINE_VERSION="v3.6" \
   TERM=xterm \
-  BUILD_DATE="2017-09-26" \
-  INFLUXDB_VERSION="1.3.5"
+  BUILD_DATE="2017-10-19" \
+  INFLUXDB_VERSION="1.3.6"
 
 EXPOSE 2003 8083 8086
 
 LABEL \
-  version="1709" \
+  version="1710" \
   org.label-schema.build-date=${BUILD_DATE} \
   org.label-schema.name="InfluxDB Docker Image" \
   org.label-schema.description="Inofficial InfluxDB Docker Image" \
@@ -40,11 +40,12 @@ RUN \
   for key in \
     05CE15085FC09D18E99EFB22684A14CF2582E0C5 ; \
   do \
-    gpg --keyserver ha.pool.sks-keyservers.net --recv-keys "$key" || \
-    gpg --keyserver pgp.mit.edu --recv-keys "$key" || \
-    gpg --keyserver keyserver.pgp.com --recv-keys "$key" ; \
+    gpg --output /tmp/gpg.out --keyserver ha.pool.sks-keyservers.net --recv-keys "$key" 2> /dev/null || \
+    gpg --output /tmp/gpg.out --keyserver pgp.mit.edu --recv-keys "$key" 2> /dev/null || \
+    gpg --output /tmp/gpg.out --keyserver keyserver.pgp.com --recv-keys "$key" 2> /dev/null ; \
   done && \
   #
+  echo "fetch influxdb ${INFLUXDB_VERSION}" && \
   curl \
     --silent \
     --location \
@@ -64,15 +65,28 @@ RUN \
   gpg \
     --batch \
     --verify \
+    --output /tmp/gpg.out \
     /tmp/influxdb-${INFLUXDB_VERSION}-static_linux_amd64.tar.gz.asc \
-    /tmp/influxdb-${INFLUXDB_VERSION}-static_linux_amd64.tar.gz && \
+    /tmp/influxdb-${INFLUXDB_VERSION}-static_linux_amd64.tar.gz \
+    1> /dev/null \
+    2> /dev/null && \
   #
   mkdir -p /usr/src && \
   mkdir -p /etc/influxdb && \
+  #
+  echo "extract archive" && \
   tar -C /usr/src -xzf /tmp/influxdb-${INFLUXDB_VERSION}-static_linux_amd64.tar.gz && \
-  cp /usr/src/influxdb-*/influxdb.conf /etc/influxdb/influxdb.conf-DIST  && \
-  chmod -R +x /usr/src/influxdb-*/influx* && \
-  cp -a /usr/src/influxdb-*/influx* /usr/bin/ && \
+  #
+  cd /usr/src && \
+  echo "install files" && \
+  find . -name influxdb.conf -print0 | xargs -0 -I{} mv {} /etc/influxdb/influxdb.conf-DIST && \
+  if [ ! -d etc ] ; then \
+    mv $(ls -1) influxdb ; \
+    mv /usr/src/influxdb/influx* /usr/bin/ ; \
+  else \
+    [ -d usr/bin ] && mv usr/bin/* /usr/bin/ ; \
+  fi && \
+  chmod -R +x /usr/bin/influx* && \
   #
   apk del .build-deps && \
   rm -rf \
