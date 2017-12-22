@@ -1,23 +1,20 @@
 
-FROM alpine:3.6
-
-MAINTAINER Bodo Schulz <bodo@boone-schulz.de>
+FROM alpine:3.7
 
 ENV \
-  ALPINE_MIRROR="mirror1.hs-esslingen.de/pub/Mirrors" \
-  ALPINE_VERSION="v3.6" \
   TERM=xterm \
-  BUILD_DATE="2017-10-19" \
-  INFLUXDB_VERSION="1.3.6"
+  BUILD_DATE="2017-12-22" \
+  INFLUXDB_VERSION="1.3.8"
 
 EXPOSE 2003 8083 8086
 
 LABEL \
-  version="1710" \
+  version="1712" \
+  maintainer="Bodo Schulz <bodo@boone-schulz.de>" \
   org.label-schema.build-date=${BUILD_DATE} \
   org.label-schema.name="InfluxDB Docker Image" \
   org.label-schema.description="Inofficial InfluxDB Docker Image" \
-  org.label-schema.url="https://www.influxdb.com/" \
+  org.label-schema.url="https://github.com/influxdata/influxdb" \
   org.label-schema.vcs-url="https://github.com/bodsch/docker-influxdb" \
   org.label-schema.vendor="Bodo Schulz" \
   org.label-schema.version=${INFLUXDB_VERSION} \
@@ -28,14 +25,14 @@ LABEL \
 # ---------------------------------------------------------------------------------------
 
 RUN \
-  echo "http://${ALPINE_MIRROR}/alpine/${ALPINE_VERSION}/main"       > /etc/apk/repositories && \
-  echo "http://${ALPINE_MIRROR}/alpine/${ALPINE_VERSION}/community" >> /etc/apk/repositories && \
-  apk --no-cache update && \
-  apk --no-cache upgrade && \
+  apk update --quiet --no-cache && \
+  apk upgrade --quiet --no-cache && \
   echo 'hosts: files dns' >> /etc/nsswitch.conf && \
-  apk add --no-cache tzdata bash jq && \
+  apk add --quiet --no-cache \
+    tzdata bash jq && \
   set -e && \
-  apk add --no-cache --virtual .build-deps curl gnupg tar ca-certificates && \
+  apk add --quiet --no-cache --virtual .build-deps \
+    curl gnupg tar ca-certificates && \
   update-ca-certificates 2> /dev/null && \
   for key in \
     05CE15085FC09D18E99EFB22684A14CF2582E0C5 ; \
